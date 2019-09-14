@@ -25,7 +25,7 @@ $ ./go-nats -s stun.sipgate.net
 ```
 
 ## Public STUN servers
-STUN servers to use must support RFC 5780 (NAT Bhavior Discovery Using STUN).
+STUN servers to use must support RFC 5780 (NAT Behavior Discovery Using STUN).
 Here's a list of public STUN servers that worked with go-nats as of Sep. 13, 2019.
 
 * stun.ekiga.net
