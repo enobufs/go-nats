@@ -1,5 +1,5 @@
 # go-nats
-NAT type discovery tool using STUN written purely in Go, powered by [pion](pion.ly).
+NAT type discovery tool using STUN written purely in Go, powered by [pion](https://pion.ly).
 
 ## Usage
 ```
