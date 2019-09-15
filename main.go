@@ -22,7 +22,13 @@ func main() {
 
 	flag.Parse()
 
-	res, err := nats.Discover(*server, *verbose)
+	n, err := nats.NewNATS(&nats.Config{
+		Server:  *server,
+		Verbose: *verbose,
+	})
+	check(err)
+
+	res, err := n.Discover()
 	check(err)
 
 	bytes, err := json.MarshalIndent(res, "", "  ")

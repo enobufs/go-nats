@@ -23,7 +23,7 @@ func (a *attrChangeRequest) getAs(m *stun.Message, t stun.AttrType) error {
 	if err != nil {
 		return err
 	}
-	if len(bytes) <= 4 {
+	if len(bytes) < 4 {
 		return io.ErrUnexpectedEOF
 	}
 	val := binary.BigEndian.Uint32(bytes[0:4])
@@ -44,4 +44,8 @@ func (a *attrChangeRequest) addAs(m *stun.Message, t stun.AttrType) error {
 	binary.BigEndian.PutUint32(bytes, val)
 	m.Add(t, bytes)
 	return nil
+}
+
+func (a *attrChangeRequest) GetFrom(m *stun.Message) error {
+	return a.getAs(m, attrTypeChangeRequest)
 }

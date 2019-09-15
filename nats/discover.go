@@ -7,6 +7,7 @@ import (
 
 	"github.com/pion/logging"
 	"github.com/pion/stun"
+	"github.com/pion/transport/vnet"
 	"github.com/pion/turn"
 )
 
@@ -46,25 +47,60 @@ type DiscoverResult struct {
 	ExternalIP        string                 `json:"externalIP"`
 }
 
-// Discover performs NAT discovery process defined in RFC 5780.
-func Discover(server string, verbose bool) (*DiscoverResult, error) {
-	server = formatHostPort(server, 3478)
+// Config has config parameters for NewNATS.
+type Config struct {
+	Server  string
+	Verbose bool
+	Net     *vnet.Net
+}
 
-	conn, err := net.ListenPacket("udp4", "0.0.0.0:0")
+// NATS a class supports NAT type discovery feature.
+type NATS struct {
+	serverAddr net.Addr
+	verbose    bool
+	net        *vnet.Net
+	dfErr      error // filled by discoverFilteringBehavior
+}
+
+// NewNATS creats a new instance of NATS.
+func NewNATS(config *Config) (*NATS, error) {
+	server := formatHostPort(config.Server, 3478)
+
+	if config.Net == nil {
+		config.Net = vnet.NewNet(nil)
+	}
+
+	serverAddr, err := config.Net.ResolveUDPAddr("udp", server)
+	if err != nil {
+		return nil, err
+	}
+
+	return &NATS{
+		serverAddr: serverAddr,
+		verbose:    config.Verbose,
+		net:        config.Net,
+	}, nil
+}
+
+// Discover performs NAT discovery process defined in RFC 5780.
+func (nats *NATS) Discover() (*DiscoverResult, error) {
+	nats.dfErr = nil
+	conn, err := nats.net.ListenPacket("udp4", "0.0.0.0:0")
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
 	locAddr := conn.LocalAddr().(*net.UDPAddr)
-	if verbose {
+	if nats.verbose {
 		log.Printf("Local port: %d", locAddr.Port)
 	}
 
 	c, err := turn.NewClient(&turn.ClientConfig{
-		STUNServerAddr: server,
+		STUNServerAddr: nats.serverAddr.String(),
 		Conn:           conn,
 		LoggerFactory:  logging.NewDefaultLoggerFactory(),
+		Net:            nats.net,
 	})
 	if err != nil {
 		return nil, err
@@ -75,7 +111,7 @@ func Discover(server string, verbose bool) (*DiscoverResult, error) {
 		return nil, err
 	}
 
-	if verbose {
+	if nats.verbose {
 		log.Printf("STUN server: %s", c.STUNServerAddr().String())
 	}
 
@@ -85,7 +121,7 @@ func Discover(server string, verbose bool) (*DiscoverResult, error) {
 	res := &DiscoverResult{}
 
 	// Run filtering behavior disocvery in parallel
-	filterDiscovDone, err := discoverFilteringBehavior(server)
+	filterDiscovDone, err := nats.discoverFilteringBehavior()
 
 	// Mapping behavior desicovery
 
@@ -114,12 +150,12 @@ func Discover(server string, verbose bool) (*DiscoverResult, error) {
 		}
 		mappedAddrs[i] = &net.UDPAddr{IP: maddr.IP, Port: maddr.Port}
 
-		if verbose {
+		if nats.verbose {
 			log.Printf("MAPPED-ADDRESS [%d]: %s", i, mappedAddrs[i].String())
 		}
 
 		if i == 0 {
-			res.IsNatted = !findIsLocalIP(mappedAddrs[0].IP)
+			res.IsNatted = !nats.findIsLocalIP(mappedAddrs[0].IP)
 			res.PortPreservation = (mappedAddrs[0].Port == locAddr.Port)
 			res.ExternalIP = mappedAddrs[0].IP.String()
 
@@ -130,7 +166,7 @@ func Discover(server string, verbose bool) (*DiscoverResult, error) {
 				}
 			}
 
-			if verbose {
+			if nats.verbose {
 				log.Printf("CHANGED-ADDRESS: %s", caddr.String())
 			}
 
@@ -154,6 +190,9 @@ func Discover(server string, verbose bool) (*DiscoverResult, error) {
 
 	// Wait for filtering behavior disocvery to complete
 	res.FilteringBehavior = <-filterDiscovDone
+	if nats.dfErr != nil {
+		return nil, nats.dfErr
+	}
 
 	// Determine the NAT type
 	if res.IsNatted {
@@ -183,9 +222,9 @@ func Discover(server string, verbose bool) (*DiscoverResult, error) {
 }
 
 // Test if this IP is a local IP.
-func findIsLocalIP(ip net.IP) bool {
+func (nats *NATS) findIsLocalIP(ip net.IP) bool {
 	// If we can bind this IP, it is a valid local IP address.
-	conn, err := net.ListenPacket("udp", fmt.Sprintf("%s:0", ip.String))
+	conn, err := nats.net.ListenPacket("udp", fmt.Sprintf("%s:0", ip.String()))
 	if err != nil {
 		return false
 	}
@@ -193,14 +232,19 @@ func findIsLocalIP(ip net.IP) bool {
 	return true
 }
 
-func discoverFilteringBehavior(server string) (<-chan EndpointDependencyType, error) {
-	conn, err := net.ListenPacket("udp4", "0.0.0.0:0")
+func (nats *NATS) discoverFilteringBehavior() (<-chan EndpointDependencyType, error) {
+	conn, err := nats.net.ListenPacket("udp4", "0.0.0.0:0")
 	if err != nil {
 		return nil, err
 	}
 
+	if nats.verbose {
+		locAddr := conn.LocalAddr().(*net.UDPAddr)
+		log.Printf("Local port: %d (for filtering discovery)", locAddr.Port)
+	}
+
 	c, err := turn.NewClient(&turn.ClientConfig{
-		STUNServerAddr: server,
+		STUNServerAddr: nats.serverAddr.String(),
 		Conn:           conn,
 		LoggerFactory:  logging.NewDefaultLoggerFactory(),
 	})
@@ -219,12 +263,12 @@ func discoverFilteringBehavior(server string) (<-chan EndpointDependencyType, er
 		defer c.Close()
 		defer conn.Close()
 
-		received1Ch, err2 := performTransactionWith(c, true, false)
+		received1Ch, err2 := nats.performTransactionWith(c, true, false)
 		if err2 != nil {
 			done <- EndpointUndefined
 			return
 		}
-		received2Ch, err2 := performTransactionWith(c, false, true)
+		received2Ch, err2 := nats.performTransactionWith(c, false, true)
 		if err2 != nil {
 			done <- EndpointUndefined
 			return
@@ -232,22 +276,25 @@ func discoverFilteringBehavior(server string) (<-chan EndpointDependencyType, er
 
 		received1 := <-received1Ch
 		received2 := <-received2Ch
+		if nats.verbose {
+			log.Printf("recv1=%v recv2=%v", received1, received2)
+		}
 
 		if received1 {
-			if received2 {
-				done <- EndpointIndependent
-			} else {
-				done <- EndpointAddrDependent
-			}
+			done <- EndpointIndependent
 		} else {
-			done <- EndpointAddrPortDependent
+			if received2 {
+				done <- EndpointAddrDependent
+			} else {
+				done <- EndpointAddrPortDependent
+			}
 		}
 	}()
 
 	return done, nil
 }
 
-func performTransactionWith(c *turn.Client, changeIP, changePort bool) (<-chan bool, error) {
+func (nats *NATS) performTransactionWith(c *turn.Client, changeIP, changePort bool) (<-chan bool, error) {
 	attrs := []stun.Setter{
 		stun.TransactionID,
 		stun.BindingRequest,
@@ -259,7 +306,8 @@ func performTransactionWith(c *turn.Client, changeIP, changePort bool) (<-chan b
 	}
 
 	err = (&attrChangeRequest{
-		ChangeIP: true,
+		ChangeIP:   changeIP,
+		ChangePort: changePort,
 	}).addAs(msg, attrTypeChangeRequest)
 	if err != nil {
 		return nil, err
@@ -268,11 +316,27 @@ func performTransactionWith(c *turn.Client, changeIP, changePort bool) (<-chan b
 	receivedCh := make(chan bool)
 
 	go func() {
-		_, err = c.PerformTransaction(msg, c.STUNServerAddr(), false)
+		res, err := c.PerformTransaction(msg, c.STUNServerAddr(), false)
 		if err != nil {
 			receivedCh <- false
 			return
 		}
+
+		// Check if CHANGE-REQUEST was servered by the server
+		from := res.From.(*net.UDPAddr)
+		if changeIP {
+			if from.IP.Equal(c.STUNServerAddr().(*net.UDPAddr).IP) {
+				nats.dfErr = fmt.Errorf("CHANGE-REQUEST ignored (IP)")
+				receivedCh <- false
+			}
+		}
+		if changePort {
+			if from.Port == c.STUNServerAddr().(*net.UDPAddr).Port {
+				nats.dfErr = fmt.Errorf("CHANGE-REQUEST ignored (Port)")
+				receivedCh <- false
+			}
+		}
+
 		receivedCh <- true
 	}()
 

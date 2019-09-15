@@ -90,3 +90,11 @@ func (a *attrAddress) addAs(m *stun.Message, t stun.AttrType) error {
 	m.Add(t, value[:4+len(ip)])
 	return nil
 }
+
+type attrChangedAddress struct {
+	attrAddress
+}
+
+func (a *attrChangedAddress) AddTo(m *stun.Message) error {
+	return a.addAs(m, attrTypeChangedAddress)
+}
