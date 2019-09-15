@@ -7,7 +7,7 @@ $ go build
 $ ./go-nats -h
 Usage of ./go-nats:
   -s string
-    	STUN server address. (defaults to "stun.ekiga.net:3478" (default "stun.ekiga.net:3478")
+        STUN server address. (default "stun.ekiga.net:3478")
   -v	Verbose
 ```
 
@@ -24,6 +24,8 @@ $ ./go-nats -s stun.sipgate.net
 }
 ```
 
+> Depending on the type of NAT, it may take ~8 seconds.
+
 ## Public STUN servers
 STUN servers to use must support RFC 5780 (NAT Behavior Discovery Using STUN).
 Here's a list of public STUN servers that worked with go-nats as of Sep. 13, 2019.
@@ -34,6 +36,8 @@ Here's a list of public STUN servers that worked with go-nats as of Sep. 13, 201
 * stun.sipgate.net
 * stun.sipgate.net:10000
 * stun.1-voip.com
+* stun.12connect.com
+* stun.1und1.de
+* stun.3clogic.com
 
-> TODO: there may be more from this list:
-* [Emercoin/ENUMER projects](http://olegh.ftp.sh/public-stun.txt)
+> TODO: there may be more from this list: [Emercoin/ENUMER projects](http://olegh.ftp.sh/public-stun.txt)

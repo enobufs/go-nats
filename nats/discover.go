@@ -122,6 +122,9 @@ func (nats *NATS) Discover() (*DiscoverResult, error) {
 
 	// Run filtering behavior disocvery in parallel
 	filterDiscovDone, err := nats.discoverFilteringBehavior()
+	if err != nil {
+		return nil, err
+	}
 
 	// Mapping behavior desicovery
 

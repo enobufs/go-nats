@@ -12,7 +12,6 @@ import (
 type virtualNet struct {
 	wan    *vnet.Router
 	net0   *vnet.Net
-	net1   *vnet.Net
 	server *STUNServer
 }
 
