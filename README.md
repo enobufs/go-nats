@@ -7,7 +7,7 @@ $ go build
 $ ./go-nats -h
 Usage of ./go-nats:
   -s string
-        STUN server address. (default "stun.ekiga.net:3478")
+        STUN server address. (default "stun.sipgate.net:3478")
   -v	Verbose
 ```
 

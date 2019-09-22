@@ -17,7 +17,7 @@ func check(err error) {
 }
 
 func main() {
-	server := flag.String("s", "stun.ekiga.net:3478", "STUN server address.")
+	server := flag.String("s", "stun.sipgate.net:3478", "STUN server address.")
 	verbose := flag.Bool("v", false, "Verbose")
 
 	flag.Parse()
