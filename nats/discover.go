@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 
 	"github.com/pion/logging"
 	"github.com/pion/stun"
@@ -60,6 +61,7 @@ type NATS struct {
 	verbose    bool
 	net        *vnet.Net
 	dfErr      error // filled by discoverFilteringBehavior
+	mu         sync.Mutex
 }
 
 // NewNATS creats a new instance of NATS.
@@ -148,6 +150,7 @@ func (nats *NATS) Discover() (*DiscoverResult, error) {
 		var maddr stun.XORMappedAddress
 		if err = maddr.GetFrom(trRes.Msg); err != nil {
 			if err != nil {
+				<-filterDiscovDone
 				return nil, fmt.Errorf("XOR-MAPPED-ADDRESS not found")
 			}
 		}
@@ -165,6 +168,7 @@ func (nats *NATS) Discover() (*DiscoverResult, error) {
 			var caddr attrAddress
 			if err = caddr.getAs(trRes.Msg, attrTypeChangedAddress); err != nil {
 				if err != nil {
+					<-filterDiscovDone
 					return nil, fmt.Errorf("CHANGED-ADDRESS not found")
 				}
 			}
@@ -329,14 +333,20 @@ func (nats *NATS) performTransactionWith(c *turn.Client, changeIP, changePort bo
 		from := res.From.(*net.UDPAddr)
 		if changeIP {
 			if from.IP.Equal(c.STUNServerAddr().(*net.UDPAddr).IP) {
+				nats.mu.Lock()
 				nats.dfErr = fmt.Errorf("CHANGE-REQUEST ignored (IP)")
+				nats.mu.Unlock()
 				receivedCh <- false
+				return
 			}
 		}
 		if changePort {
 			if from.Port == c.STUNServerAddr().(*net.UDPAddr).Port {
+				nats.mu.Lock()
 				nats.dfErr = fmt.Errorf("CHANGE-REQUEST ignored (Port)")
+				nats.mu.Unlock()
 				receivedCh <- false
+				return
 			}
 		}
 
