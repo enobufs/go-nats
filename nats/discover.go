@@ -335,6 +335,7 @@ func (nats *NATS) performTransactionWith(c *turn.Client, changeIP, changePort bo
 				nats.dfErr = fmt.Errorf("CHANGE-REQUEST ignored (IP)")
 				nats.mu.Unlock()
 				receivedCh <- false
+				return
 			}
 		}
 		if changePort {
@@ -343,6 +344,7 @@ func (nats *NATS) performTransactionWith(c *turn.Client, changeIP, changePort bo
 				nats.dfErr = fmt.Errorf("CHANGE-REQUEST ignored (Port)")
 				nats.mu.Unlock()
 				receivedCh <- false
+				return
 			}
 		}
 
