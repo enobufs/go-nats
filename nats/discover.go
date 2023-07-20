@@ -150,6 +150,7 @@ func (nats *NATS) Discover() (*DiscoverResult, error) {
 		var maddr stun.XORMappedAddress
 		if err = maddr.GetFrom(trRes.Msg); err != nil {
 			if err != nil {
+				<-filterDiscovDone
 				return nil, fmt.Errorf("XOR-MAPPED-ADDRESS not found")
 			}
 		}
@@ -167,6 +168,7 @@ func (nats *NATS) Discover() (*DiscoverResult, error) {
 			var caddr attrAddress
 			if err = caddr.getAs(trRes.Msg, attrTypeChangedAddress); err != nil {
 				if err != nil {
+					<-filterDiscovDone
 					return nil, fmt.Errorf("CHANGED-ADDRESS not found")
 				}
 			}
